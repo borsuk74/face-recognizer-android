@@ -59,6 +59,16 @@ public class ImageUtils {
         FileUtils.saveBitmap(bitmap, "preview.png");
     }
 
+    /**
+     * Saves a Bitmap object to disk for analysis.
+     *
+     * @param bitmap The bitmap to save.
+     */
+    public static void saveBitmap(final Bitmap bitmap, final  String filename) {
+        //FileUtils.saveBitmap(bitmap, "preview.png");
+        FileUtils.saveBitmap(bitmap, filename);
+    }
+
     // This value is 2 ^ 18 - 1, and is used to clamp the RGB values before their ranges
     // are normalized to eight bits.
     static final int kMaxChannelValue = 262143;

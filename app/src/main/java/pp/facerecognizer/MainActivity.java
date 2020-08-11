@@ -236,6 +236,8 @@ public class MainActivity extends CameraActivity implements OnImageAvailableList
     @Override
     protected void processImage() {
         ++timestamp;
+        final long startTime = SystemClock.uptimeMillis();
+        LOGGER.i("Process Image called at: " + startTime + "  ms.");
         final long currTimestamp = timestamp;
         byte[] originalLuminance = getLuminance();
         tracker.onFrame(
@@ -244,9 +246,16 @@ public class MainActivity extends CameraActivity implements OnImageAvailableList
                 getLuminanceStride(),
                 sensorOrientation,
                 originalLuminance,
-                timestamp);
+                timestamp
+                );
         trackingOverlay.postInvalidate();
 
+        rgbFrameBitmap.setPixels(getRgbBytes(), 0, previewWidth, 0, 0, previewWidth, previewHeight);
+        //Aleks added
+        if (!tracker.sendFaces(rgbFrameBitmap, previewWidth,previewHeight,startTime))
+        {
+            LOGGER.i("Failed to send message at " + currTimestamp + " to the server.");
+        }
         // No mutex needed as this method is not reentrant.
         if (computingDetection || !initialized || training) {
             readyForNextImage();
@@ -255,7 +264,6 @@ public class MainActivity extends CameraActivity implements OnImageAvailableList
         computingDetection = true;
         LOGGER.i("Preparing image " + currTimestamp + " for detection in bg thread.");
 
-        rgbFrameBitmap.setPixels(getRgbBytes(), 0, previewWidth, 0, 0, previewWidth, previewHeight);
 
         if (luminanceCopy == null) {
             luminanceCopy = new byte[originalLuminance.length];
@@ -273,7 +281,6 @@ public class MainActivity extends CameraActivity implements OnImageAvailableList
         runInBackground(
                 () -> {
                     LOGGER.i("Running detection on image " + currTimestamp);
-                    final long startTime = SystemClock.uptimeMillis();
 
                     cropCopyBitmap = Bitmap.createBitmap(croppedBitmap);
                     List<Recognizer.Recognition> mappedRecognitions =

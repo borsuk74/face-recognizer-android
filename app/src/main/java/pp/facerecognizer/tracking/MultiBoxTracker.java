@@ -16,6 +16,7 @@ limitations under the License.
 package pp.facerecognizer.tracking;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
@@ -23,7 +24,9 @@ import android.graphics.Paint;
 import android.graphics.Paint.Cap;
 import android.graphics.Paint.Join;
 import android.graphics.Paint.Style;
+import android.graphics.Rect;
 import android.graphics.RectF;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Pair;
 import android.util.TypedValue;
@@ -67,11 +70,40 @@ public class MultiBoxTracker {
             Color.parseColor("#AA33AA"), Color.parseColor("#0D0068")
     };
 
+    private static final int FACE_IMAGE_WIDTH = 160;
+
+    private static final int FACE_IMAGE_HEIGHT = 160;
+
     private final Queue<Integer> availableColors = new LinkedList<Integer>();
 
     private ObjectTracker objectTracker;
 
     private final List<Pair<Float, RectF>> screenRects = new LinkedList<Pair<Float, RectF>>();
+
+    public synchronized boolean sendFaces(Bitmap rgbFrameBitmap, int previewWidth, int previewHeight, long timeStamp) {
+        final LinkedList<TrackedRecognition> copyList = new LinkedList<TrackedRecognition>(trackedObjects);
+        for (final TrackedRecognition recognition : copyList) {
+            //create a rgb bitmap of size 160x160, copy data from rgbFrameBitmap,
+            //based on rectF in recognitions, save it somewhere for debugging
+            Bitmap bitmap = Bitmap.createBitmap(FACE_IMAGE_WIDTH, FACE_IMAGE_HEIGHT, Bitmap.Config.ARGB_8888);
+            final Canvas canvas = new Canvas(bitmap);
+            final ObjectTracker.TrackedObject trackedObject = recognition.trackedObject;
+            Rect srcRect = new Rect();
+            RectF rectF = trackedObject.getTrackedPositionInPreviewFrame();
+            rectF.round(srcRect);
+            canvas.drawBitmap(rgbFrameBitmap,srcRect,  new Rect(0, 0, FACE_IMAGE_WIDTH, FACE_IMAGE_HEIGHT), null);
+
+            //Ugly temporary solution how to rotate bitmap on 90 degrees, need to take care of general case later
+            // for any position of the camera wrt canvas
+            Matrix rotMatrix = new Matrix();
+            rotMatrix.postRotate(90);
+            Bitmap rotatedBitmap = Bitmap.createBitmap(bitmap,0,0,bitmap.getWidth(),bitmap.getHeight(),rotMatrix,true);
+
+            String filename = String.valueOf(timeStamp)+"preview.png";
+            ImageUtils.saveBitmap(rotatedBitmap,filename);
+        }
+        return true;
+    }
 
     private static class TrackedRecognition {
         ObjectTracker.TrackedObject trackedObject;
@@ -203,7 +235,10 @@ public class MultiBoxTracker {
             final int rowStride,
             final int sensorOrienation,
             final byte[] frame,
-            final long timestamp) {
+            final long timestamp
+            //Aleks added parameters,size of this frame is dynamic and set in cameraActivity
+            //,final int[] rgbFrame
+            ) {
         if (objectTracker == null && !initialized) {
             ObjectTracker.clearInstance();
 
