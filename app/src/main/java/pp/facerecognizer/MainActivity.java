@@ -1,18 +1,18 @@
 /*
-* Copyright 2016 The TensorFlow Authors. All Rights Reserved.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*       http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright 2016 The TensorFlow Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package pp.facerecognizer;
 
@@ -53,9 +53,9 @@ import pp.facerecognizer.ml.BlazeFace;
 import pp.facerecognizer.tracking.MultiBoxTracker;
 
 /**
-* An activity that uses a TensorFlowMultiBoxDetector and ObjectTracker to detect and then track
-* objects.
-*/
+ * An activity that uses a TensorFlowMultiBoxDetector and ObjectTracker to detect and then track
+ * objects.
+ */
 public class MainActivity extends CameraActivity implements OnImageAvailableListener {
     private static final Logger LOGGER = new Logger();
 
@@ -137,8 +137,8 @@ public class MainActivity extends CameraActivity implements OnImageAvailableList
             init();
 
         final float textSizePx =
-        TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP, TEXT_SIZE_DIP, getResources().getDisplayMetrics());
+                TypedValue.applyDimension(
+                        TypedValue.COMPLEX_UNIT_DIP, TEXT_SIZE_DIP, getResources().getDisplayMetrics());
         borderedText = new BorderedText(textSizePx);
         borderedText.setTypeface(Typeface.MONOSPACE);
 
@@ -246,16 +246,17 @@ public class MainActivity extends CameraActivity implements OnImageAvailableList
                 getLuminanceStride(),
                 sensorOrientation,
                 originalLuminance,
-                timestamp
-                );
+                timestamp);
         trackingOverlay.postInvalidate();
 
         rgbFrameBitmap.setPixels(getRgbBytes(), 0, previewWidth, 0, 0, previewWidth, previewHeight);
         //Aleks added
+
         if (!tracker.sendFaces(rgbFrameBitmap, previewWidth,previewHeight,startTime))
         {
             LOGGER.i("Failed to send message at " + currTimestamp + " to the server.");
         }
+
         // No mutex needed as this method is not reentrant.
         if (computingDetection || !initialized || training) {
             readyForNextImage();
@@ -263,6 +264,7 @@ public class MainActivity extends CameraActivity implements OnImageAvailableList
         }
         computingDetection = true;
         LOGGER.i("Preparing image " + currTimestamp + " for detection in bg thread.");
+
 
 
         if (luminanceCopy == null) {
@@ -281,18 +283,20 @@ public class MainActivity extends CameraActivity implements OnImageAvailableList
         runInBackground(
                 () -> {
                     LOGGER.i("Running detection on image " + currTimestamp);
+                    //final long startTime = SystemClock.uptimeMillis();
 
                     cropCopyBitmap = Bitmap.createBitmap(croppedBitmap);
                     List<Recognizer.Recognition> mappedRecognitions =
                             recognizer.recognizeImage(croppedBitmap,cropToFrameTransform);
 
-                    lastProcessingTimeMs = SystemClock.uptimeMillis() - startTime;
+                    //lastProcessingTimeMs = SystemClock.uptimeMillis() - startTime;
                     tracker.trackResults(mappedRecognitions, luminanceCopy, currTimestamp);
                     trackingOverlay.postInvalidate();
 
                     requestRender();
                     computingDetection = false;
                 });
+        lastProcessingTimeMs = SystemClock.uptimeMillis() - startTime;
     }
 
     @Override

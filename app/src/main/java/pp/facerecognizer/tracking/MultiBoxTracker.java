@@ -32,6 +32,7 @@ import android.util.Pair;
 import android.util.TypedValue;
 import android.widget.Toast;
 
+import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
@@ -40,6 +41,24 @@ import pp.facerecognizer.Recognizer.Recognition;
 import pp.facerecognizer.env.BorderedText;
 import pp.facerecognizer.env.ImageUtils;
 import pp.facerecognizer.env.Logger;
+
+//added to implement grpc/protobuf functionality
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import io.grpc.StatusRuntimeException;
+
+import com.google.protobuf.ByteString;
+import com.proto.face.FaceRecognitionRequest;
+import com.proto.face.FaceRecognitionResponse;
+import com.proto.face.FaceServiceGrpc;
+
+
+import io.grpc.stub.StreamObserver;
+//for debugging purposes
+//import com.proto.movie.AddMovieResponse;
+//import com.proto.movie.Movie;
+//import com.proto.movie.MovieServiceGrpc;
+
 
 /**
  * A tracker wrapping ObjectTracker that also handles non-max suppression and matching existing
@@ -70,40 +89,87 @@ public class MultiBoxTracker {
             Color.parseColor("#AA33AA"), Color.parseColor("#0D0068")
     };
 
-    private static final int FACE_IMAGE_WIDTH = 160;
-
-    private static final int FACE_IMAGE_HEIGHT = 160;
-
     private final Queue<Integer> availableColors = new LinkedList<Integer>();
 
     private ObjectTracker objectTracker;
 
     private final List<Pair<Float, RectF>> screenRects = new LinkedList<Pair<Float, RectF>>();
+    //Added Aleks for grpc/protobuf functionality
+    private ManagedChannel mChan;
+
+    private FaceServiceGrpc.FaceServiceBlockingStub stub;
+    //for debugging purposes
+    //private MovieServiceGrpc.MovieServiceBlockingStub stubDebug;
+
+    private static final String mHostIp = "192.168.0.17";
+    //private static final String mHostIp = "127.0.0.1";
+    //    private static final String mHostIp = "192.168.43.254";
+    private static final int mPort = 50052;
 
     public synchronized boolean sendFaces(Bitmap rgbFrameBitmap, int previewWidth, int previewHeight, long timeStamp) {
-        final LinkedList<TrackedRecognition> copyList = new LinkedList<TrackedRecognition>(trackedObjects);
+
+        final LinkedList<TrackedRecognition> copyList =
+                new LinkedList<TrackedRecognition>(trackedObjects);
+        final long start = SystemClock.uptimeMillis();
+        FaceRecognitionRequest.Builder builder = FaceRecognitionRequest.newBuilder()
+                .setTimeStamp(start);
+        //.setVodeoContent(0, ByteString.EMPTY).build();
+
         for (final TrackedRecognition recognition : copyList) {
             //create a rgb bitmap of size 160x160, copy data from rgbFrameBitmap,
             //based on rectF in recognitions, save it somewhere for debugging
-            Bitmap bitmap = Bitmap.createBitmap(FACE_IMAGE_WIDTH, FACE_IMAGE_HEIGHT, Bitmap.Config.ARGB_8888);
+            Bitmap bitmap = Bitmap.createBitmap(160, 160, Bitmap.Config.ARGB_8888);
             final Canvas canvas = new Canvas(bitmap);
             final ObjectTracker.TrackedObject trackedObject = recognition.trackedObject;
             Rect srcRect = new Rect();
             RectF rectF = trackedObject.getTrackedPositionInPreviewFrame();
             rectF.round(srcRect);
-            canvas.drawBitmap(rgbFrameBitmap,srcRect,  new Rect(0, 0, FACE_IMAGE_WIDTH, FACE_IMAGE_HEIGHT), null);
-
-            //Ugly temporary solution how to rotate bitmap on 90 degrees, need to take care of general case later
-            // for any position of the camera wrt canvas
+            canvas.drawBitmap(rgbFrameBitmap,srcRect,
+                    new Rect(0, 0, 160, 160), null);
+            //Ugly temporary solution how to rotate bitmap on 90 degrees
             Matrix rotMatrix = new Matrix();
             rotMatrix.postRotate(90);
             Bitmap rotatedBitmap = Bitmap.createBitmap(bitmap,0,0,bitmap.getWidth(),bitmap.getHeight(),rotMatrix,true);
 
-            String filename = String.valueOf(timeStamp)+"preview.png";
-            ImageUtils.saveBitmap(rotatedBitmap,filename);
+            String filename = String.valueOf(start)+"preview.png";
+            //ImageUtils.saveBitmap(rotatedBitmap,filename);
+
+            //int size  = rotatedBitmap.getRowBytes() * rotatedBitmap.getHeight();
+
+            ByteBuffer b = ByteBuffer.allocate(rotatedBitmap.getByteCount());
+
+            rotatedBitmap.copyPixelsToBuffer(b);
+
+            byte[] bytes = b.array();
+
+            //b.get(bytes, 0, bytes.length);
+
+            //update req object with new image
+            builder.addVideoContent(ByteString.copyFrom(bytes));
+
         }
+        try{
+            //for debugging purposes
+            //Movie movie = Movie.newBuilder()
+            //.setTitle("Pulp Fiction")
+            //.build();
+            //AddMovieResponse resp = stubDebug
+            //.withDeadline(Deadline.after(1, TimeUnit.SECONDS))
+            //.addMovie(movie);
+
+            //TODO: to create local server, measure throughput
+
+            FaceRecognitionRequest req = builder.build();
+            FaceRecognitionResponse response = stub.recognizeFace(req);
+
+        } catch (StatusRuntimeException e) {
+            // do something
+            logger.i("Error sending request");
+        }
+
         return true;
     }
+
 
     private static class TrackedRecognition {
         ObjectTracker.TrackedObject trackedObject;
@@ -145,6 +211,13 @@ public class MultiBoxTracker {
                 TypedValue.applyDimension(
                         TypedValue.COMPLEX_UNIT_DIP, TEXT_SIZE_DIP, context.getResources().getDisplayMetrics());
         borderedText = new BorderedText(textSizePx);
+
+        mChan = ManagedChannelBuilder.forAddress(mHostIp, mPort)
+                .usePlaintext(true)
+                .build();
+        stub = FaceServiceGrpc.newBlockingStub(mChan);
+        //for debugging purposes
+        //stubDebug = MovieServiceGrpc.newBlockingStub(mChan);
     }
 
     private Matrix getFrameToCanvasMatrix() {
@@ -235,10 +308,7 @@ public class MultiBoxTracker {
             final int rowStride,
             final int sensorOrienation,
             final byte[] frame,
-            final long timestamp
-            //Aleks added parameters,size of this frame is dynamic and set in cameraActivity
-            //,final int[] rgbFrame
-            ) {
+            final long timestamp) {
         if (objectTracker == null && !initialized) {
             ObjectTracker.clearInstance();
 
